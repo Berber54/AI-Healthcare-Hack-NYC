@@ -11,10 +11,29 @@ This file serves as a navigator for all documentation. Choose your entry point b
 | **I want to understand what this is** | EXECUTIVE_SUMMARY.md | 15 min |
 | **I want to run it locally** | QUICKSTART.md | 5 min |
 | **I want to understand every file** | TECHNICAL_ARCHITECTURE.md | 30 min |
+| **I want to build the voice flow** | CONVERSATION_DESIGN.md | 25 min |
 | **I want to set up cloud APIs** | CLOUD_APIS.md | 20 min |
 | **I want to set up observability** | LANGFUSE.md | 15 min |
 | **I want to understand architecture decisions** | CLAUDE.md | 20 min |
 | **I want complete technical reference** | README.md | 45 min |
+
+---
+
+### For Voice/Conversation Design
+
+**Start Here:**
+
+1. **CONVERSATION_DESIGN.md** (5K words)
+   - Voice flow architecture (VAD → STT → LLM → tools → TTS)
+   - Latency budgets and optimization
+   - Conversation state machine (FSM)
+   - Barge-in, endpointing, silence handling
+   - Error recovery (6 types)
+   - User state management
+   - Complete logging specification
+   - Implementation roadmap
+
+2. **QUICKSTART.md** (for local testing)
 
 ---
 
@@ -208,6 +227,31 @@ This file serves as a navigator for all documentation. Choose your entry point b
 
 ---
 
+### CONVERSATION_DESIGN.md
+
+**Audience**: Voice engineers, product managers, conversation designers, LLM engineers
+
+**What It Covers**:
+- Voice flow architecture (STT → LLM → tools → TTS)
+- Latency breakdown and optimization
+- VAD (voice activity detection)
+- Conversation state machine (12 states)
+- Conversation design patterns (greeting, asking for input, confirmation, error recovery)
+- Barge-in handling (user interrupts)
+- Endpointing (when user finishes speaking)
+- Silence handling (timeouts, clarity)
+- State management (persistent user preferences)
+- Error handling (6 error types + recovery strategies)
+- Complete logging specification
+- Implementation roadmap (4 phases)
+- Success metrics
+
+**Length**: 5K words (25 min read)
+
+**Key Takeaway**: "Complete specification for voice-first conversation flow and error handling."
+
+---
+
 ### CLAUDE.md
 
 **Audience**: Developers, architects, people asking "why did you do this?"
@@ -306,12 +350,13 @@ This file serves as a navigator for all documentation. Choose your entry point b
 |----------|-------|-------|---------|
 | EXECUTIVE_SUMMARY.md | 400 | 4,000 | Business overview |
 | TECHNICAL_ARCHITECTURE.md | 900 | 7,000 | Technical deep dive |
+| CONVERSATION_DESIGN.md | 650 | 5,000 | Voice/conversation UX |
 | QUICKSTART.md | 250 | 2,000 | Getting started |
 | CLOUD_APIS.md | 300 | 3,000 | API configuration |
 | LANGFUSE.md | 250 | 2,000 | Observability |
 | CLAUDE.md | 250 | 2,500 | Architecture decisions |
 | README.md | 350 | 4,500 | Complete reference |
-| **TOTAL** | **2,700** | **25,000** | Complete docs |
+| **TOTAL** | **3,350** | **30,000** | Complete docs |
 
 ---
 
