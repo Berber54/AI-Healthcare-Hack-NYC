@@ -11,20 +11,27 @@ class Settings(BaseSettings):
     supabase_service_role_key: str
     supabase_anon_key: str = ""
 
-    # OpenAI / LLM
-    openai_api_key: str
+    # LLM APIs
+    openai_api_key: str = ""
+    anthropic_api_key: str = ""
+    llm_provider: str = "anthropic"  # 'anthropic' or 'openai'
 
     # Vapi
     vapi_api_key: str
     vapi_assistant_id: str = ""
+    vapi_webhook_url: str = "https://localhost:8000/api/webhook/vapi"
+    vapi_websocket_enabled: bool = True
+    vapi_websocket_timeout_seconds: int = 300
 
     # ElevenLabs
     elevenlabs_api_key: str
 
-    # Google Calendar
+    # Google Calendar (OAuth 2.0)
     google_calendar_client_id: str = ""
     google_calendar_client_secret: str = ""
     google_calendar_refresh_token: str = ""
+    google_calendar_access_token: str = ""  # Runtime token (refreshed as needed)
+    google_calendar_token_expiry: str = ""  # ISO format timestamp
 
     # Google Maps
     google_maps_api_key: str = ""

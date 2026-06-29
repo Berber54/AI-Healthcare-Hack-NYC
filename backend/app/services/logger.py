@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
-from supabase import AsyncClient
+from supabase._async.client import AsyncClient
 
 logger = logging.getLogger(__name__)
 
