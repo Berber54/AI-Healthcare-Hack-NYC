@@ -95,6 +95,14 @@ class TextBuffer:
         self.buffer = ""
         return result
 
+    def size(self) -> int:
+        """Get current buffer size in characters."""
+        return len(self.buffer)
+
+    def is_empty(self) -> bool:
+        """Check if buffer is empty."""
+        return len(self.buffer) == 0
+
     def _ends_with_sentence_boundary(self) -> bool:
         """Check if buffer ends with sentence boundary."""
         return self.buffer.rstrip().endswith((".", "?", "!", ",", ";", ":"))

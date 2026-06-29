@@ -31,7 +31,7 @@ class TestTextBuffer:
     def test_add_text_at_minimum(self):
         """Test adding text that reaches minimum."""
         buffer = TextBuffer(min_chunk_size=50)
-        text = "This is a test sentence. " * 3
+        text = "This is a test sentence without punctuation " * 2  # ~90 chars, no period
 
         chunks = buffer.add(text)
 
