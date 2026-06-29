@@ -108,10 +108,13 @@ def _user_turns(turns: list[dict]) -> list[str]:
 async def _handle_call_started(message: dict, supabase: Any) -> dict:
     call = message.get("call", {})
     call_id = call.get("id")
-    run_id = (call.get("customData") or {}).get("run_id")
+    call_type = call.get("type", "")  # "inboundPhoneCall" | "outboundPhoneCall"
+    custom_data = call.get("customData") or {}
+    run_id = custom_data.get("run_id")
+    user_id = custom_data.get("user_id")
     started_at = call.get("startedAt")
 
-    await _log(supabase, run_id, call_id, "call_started", "Call started", message)
+    await _log(supabase, run_id, call_id, "call_started", f"Call started ({call_type})", message)
 
     try:
         await supabase.table("calls").update({
@@ -122,6 +125,46 @@ async def _handle_call_started(message: dict, supabase: Any) -> dict:
         }).eq("run_id", run_id).execute()
     except Exception as e:
         logger.warning(f"calls table update failed: {e}")
+
+    # On inbound calls, refresh daily_context so data is current before the agent speaks
+    if call_type == "inboundPhoneCall" and user_id:
+        try:
+            from app.services.daily_context import DailyContextService
+            from app.config import get_settings
+            from app.adapters.weather import WeatherAdapter
+            from app.adapters.maps import MapsAdapter
+            from app.adapters.calendar import GoogleCalendarAdapter, AppleICalAdapter
+            from app.services.logger import DebugLogger
+            from app.services.calendar_merge import CalendarMerger
+            from app.agents.state import AgentState
+            from app.agents.planning_agent import PlanningAgent
+
+            settings = get_settings()
+            refresh_run_id = run_id or str(uuid.uuid4())
+            debug_logger = DebugLogger(supabase, run_id=refresh_run_id, user_id=user_id)
+
+            calendar_adapters = [
+                GoogleCalendarAdapter(debug_logger, settings),
+                AppleICalAdapter(
+                    debug_logger,
+                    caldav_url=getattr(settings, "apple_ical_caldav_url", None),
+                    username=getattr(settings, "apple_ical_username", None),
+                    password=getattr(settings, "apple_ical_password", None),
+                ),
+            ]
+            weather_adapter = WeatherAdapter(debug_logger, settings.weather_api_key, settings.weather_provider)
+            maps_adapter = MapsAdapter(debug_logger, settings.google_maps_api_key)
+            daily_context_service = DailyContextService(supabase)
+
+            planning_agent = PlanningAgent(
+                debug_logger, calendar_adapters, weather_adapter, maps_adapter,
+                daily_context_service=daily_context_service,
+            )
+            state = AgentState(run_id=refresh_run_id, user_id=user_id)
+            await planning_agent.run(state)
+            logger.info(f"daily_context refreshed for inbound call user={user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to refresh daily_context on inbound call: {e}")
 
     return {"status": "ok", "event": "call.started", "call_id": call_id}
 

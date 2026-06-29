@@ -508,9 +508,11 @@ class ConversationAgent:
 
             # Trigger the phone call via Vapi
             if self.vapi_adapter and self.recipient_phone:
-                # Patch the assistant with today's plan before dialing
+                # Patch the assistant with static persona + live-fetch tool
+                tool_url = getattr(self.settings, "vapi_tool_server_url", None)
                 await self.vapi_adapter.configure_assistant(
-                    system_prompt=build_system_prompt(speech_text),
+                    system_prompt=build_system_prompt(),
+                    server_tool_url=tool_url,
                 )
                 call_start = time.time()
                 call_result = await self.vapi_adapter.initiate_call(

@@ -19,6 +19,7 @@ from app.adapters.maps import MapsAdapter
 from app.services.logger import DebugLogger
 from app.services.calendar_merge import CalendarMerger
 from app.services.langfuse_tracer import LangfuseTracer
+from app.services.daily_context import DailyContextService
 
 
 class PlanningAgent:
@@ -31,6 +32,7 @@ class PlanningAgent:
         weather_adapter: WeatherAdapter | None = None,
         maps_adapter: MapsAdapter | None = None,
         langfuse_tracer: LangfuseTracer | None = None,
+        daily_context_service: DailyContextService | None = None,
     ):
         self.debug_logger = debug_logger
         self.calendar_adapters = calendar_adapters
@@ -38,6 +40,7 @@ class PlanningAgent:
         self.maps_adapter = maps_adapter
         self.langfuse_tracer = langfuse_tracer
         self.calendar_merger = CalendarMerger(debug_logger)
+        self.daily_context_service = daily_context_service
 
     async def _fetch_calendar_events(self, user_id: str, target_date: date) -> list[CalendarEvent]:
         """Fetch calendar events from all configured adapters."""
@@ -160,6 +163,19 @@ class PlanningAgent:
             )
 
             state.plan = plan
+
+            # Persist to daily_context so the agent can fetch it live during calls
+            if self.daily_context_service:
+                try:
+                    await self.daily_context_service.upsert(state.user_id, plan)
+                except Exception as e:
+                    await self.debug_logger.log_event(
+                        agent_name="PlanningAgent",
+                        event_type="daily_context_upsert_error",
+                        level="warning",
+                        message=f"Failed to persist daily_context: {e}",
+                        error=str(e),
+                    )
 
             await self.debug_logger.log_event(
                 agent_name="PlanningAgent",

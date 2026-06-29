@@ -28,6 +28,8 @@ class Settings(BaseSettings):
     vapi_webhook_secret: str = ""  # Set in Vapi dashboard → Webhooks → Secret
     vapi_websocket_enabled: bool = True
     vapi_websocket_timeout_seconds: int = 300
+    # Public URL this server is reachable at — Vapi calls /api/daily-context on this host
+    vapi_tool_server_url: str = ""
 
     # ElevenLabs
     elevenlabs_api_key: str

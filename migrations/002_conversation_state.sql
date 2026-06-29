@@ -113,13 +113,11 @@ CREATE INDEX IF NOT EXISTS idx_error_recovery_logs_result
   ON error_recovery_logs(result);
 
 -- Add state machine fields to user_preferences (for VAD tuning in Phase 2)
-ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS (
-  vad_sensitivity FLOAT DEFAULT 0.5 CHECK (vad_sensitivity >= 0.1 AND vad_sensitivity <= 1.0),
-  speech_start_threshold FLOAT DEFAULT 0.2 CHECK (speech_start_threshold >= 0.1 AND speech_start_threshold <= 1.0),
-  speech_end_threshold FLOAT DEFAULT 0.8 CHECK (speech_end_threshold >= 0.1 AND speech_end_threshold <= 1.0),
-  silence_timeout_ms INTEGER DEFAULT 2500,
-  confirmation_timeout_ms INTEGER DEFAULT 5000
-);
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS vad_sensitivity FLOAT DEFAULT 0.5 CHECK (vad_sensitivity >= 0.1 AND vad_sensitivity <= 1.0);
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS speech_start_threshold FLOAT DEFAULT 0.2 CHECK (speech_start_threshold >= 0.1 AND speech_start_threshold <= 1.0);
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS speech_end_threshold FLOAT DEFAULT 0.8 CHECK (speech_end_threshold >= 0.1 AND speech_end_threshold <= 1.0);
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS silence_timeout_ms INTEGER DEFAULT 2500;
+ALTER TABLE user_preferences ADD COLUMN IF NOT EXISTS confirmation_timeout_ms INTEGER DEFAULT 5000;
 
 -- Enable RLS on new tables
 ALTER TABLE conversation_sessions ENABLE ROW LEVEL SECURITY;

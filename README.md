@@ -38,23 +38,38 @@ Key features:
 
 1. 6 AM scheduled Vapi call
 2. Backend creates a `run_id`
-3. **Planning Agent** fetches:
-   - Google Calendar events
-   - Apple iCal events
-   - Weather
-   - Commute estimate
-   - User preferences
-4. **Conversation Agent** converses:
-   - Calendar summary
-   - Weather summary
-   - Preliminary recommendations
-   - Asks: "Do you have anything not on your calendar?"
-5. User answers (voice)
-6. **Planning Agent** updates plan
-7. **Conversation Agent** confirms final plan
-8. Send iMessage summary (or SMS via Twilio fallback)
-9. **Evaluation & Debug Agent** scores the run
-10. Dashboard displays final plan, transcript, tool calls, debug logs
+3. **Planning Agent** fetches calendar, weather, and commute — persists structured plan to `daily_context` table in Supabase
+4. **Vapi assistant (Max)** is configured with a static persona prompt — no plan data in the system prompt
+5. Outbound call placed; Max calls `get_daily_context` tool mid-call to fetch today's plan live from Supabase
+6. Max delivers the briefing, asks: "Is there anything not on your calendar?"
+7. User answers (voice)
+8. **Conversation Agent** processes input, updates plan if needed
+9. `daily_context` row is refreshed before every subsequent inbound or outbound call that day
+10. At 23:59:59 ET, `daily_context` rows are wiped via cron (`POST /api/admin/wipe-daily-context`)
+11. Send iMessage summary (or SMS via Twilio fallback)
+12. **Evaluation & Debug Agent** scores the run
+
+---
+
+## Running Locally
+
+```bash
+# 1. DB setup (first time only)
+python scripts/setup_db.py
+
+# 2. Start the backend
+./scripts/run.sh
+
+# 3. (Separate terminal) Expose the tool endpoint to Vapi via ngrok
+ngrok http 8888
+# Copy the https URL → set VAPI_TOOL_SERVER_URL=https://<id>.ngrok-free.app/api/daily-context in backend/.env
+# Restart the server after updating .env
+
+# 4. Trigger a call
+curl -X POST 'http://localhost:8888/api/test-run?user_id=<your-user-id>'
+```
+
+> **Why ngrok?** Vapi calls `POST /api/daily-context` mid-call so Max can fetch the day's plan live. This endpoint must be publicly reachable by Vapi's servers — ngrok provides that tunnel for local dev. In production, set `VAPI_TOOL_SERVER_URL` to your Railway/Fly.io URL.
 
 ---
 

@@ -5,7 +5,7 @@ import uuid
 from contextlib import asynccontextmanager
 from datetime import date
 
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -25,6 +25,7 @@ from app.adapters.maps import MapsAdapter
 from app.adapters.voice.vapi import VapiAdapter
 from app.services.logger import DebugLogger
 from app.services.langfuse_tracer import LangfuseTracer
+from app.services.daily_context import DailyContextService
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -100,6 +101,53 @@ async def get_logs_mock(user_id: str = None, run_id: str = None, agent_name: str
     return {"logs": []}
 
 
+# Vapi server tool endpoint: called mid-call by the assistant
+@app.post("/api/daily-context")
+async def get_daily_context_tool(request: Request, db = Depends(get_db)):
+    """Vapi calls this when the assistant invokes get_daily_context.
+
+    Vapi wraps the function arguments in:
+      {"message": {"type": "tool-calls", "toolCallList": [{"function": {"arguments": {...}}}]}}
+    We extract user_id, fetch from daily_context, and return the briefing text.
+    """
+    from app.services.daily_context import DailyContextService
+
+    body = await request.json()
+    # Extract user_id from Vapi tool-call payload
+    tool_calls = (body.get("message") or {}).get("toolCallList", [])
+    user_id = None
+    tool_call_id = None
+    if tool_calls:
+        args = tool_calls[0].get("function", {}).get("arguments", {})
+        user_id = args.get("user_id")
+        tool_call_id = tool_calls[0].get("id")
+
+    if not user_id:
+        # Fallback: accept plain JSON {"user_id": "..."}
+        user_id = body.get("user_id")
+
+    if not user_id:
+        return {"results": [{"toolCallId": tool_call_id, "result": "Error: user_id is required"}]}
+
+    svc = DailyContextService(db)
+    row = await svc.fetch(user_id)
+
+    if not row:
+        return {"results": [{"toolCallId": tool_call_id, "result": "No plan found for today. Calendar may not have synced yet."}]}
+
+    briefing = svc.format_for_agent(row)
+    return {"results": [{"toolCallId": tool_call_id, "result": briefing}]}
+
+
+# Admin: wipe stale daily_context rows (call at 23:59:59 ET via cron)
+@app.post("/api/admin/wipe-daily-context")
+async def wipe_daily_context(db = Depends(get_db)):
+    from app.services.daily_context import DailyContextService
+    svc = DailyContextService(db)
+    count = await svc.wipe_stale()
+    return {"deleted": count}
+
+
 # Test endpoint: Trigger a daily planning run
 @app.post("/api/test-run")
 async def test_run(
@@ -143,7 +191,8 @@ async def test_run(
         )
 
         # Initialize agents
-        planning_agent = PlanningAgent(debug_logger, calendar_adapters, weather_adapter, maps_adapter, langfuse_tracer)
+        daily_context_service = DailyContextService(db)
+        planning_agent = PlanningAgent(debug_logger, calendar_adapters, weather_adapter, maps_adapter, langfuse_tracer, daily_context_service)
         conversation_agent = ConversationAgent(
             debug_logger,
             langfuse_tracer,

@@ -95,10 +95,6 @@ class VapiAdapter(VoiceAdapter):
             payload = {
                 "assistantId": self.assistant_id,
                 "customer": {"number": recipient_phone},
-                "customData": {
-                    "run_id": run_id,
-                    "initiated_at": datetime.utcnow().isoformat(),
-                },
             }
             if self.phone_number_id:
                 payload["phoneNumberId"] = self.phone_number_id
@@ -374,17 +370,27 @@ class VapiAdapter(VoiceAdapter):
             logger.error(f"Error ending call {call_id}: {e}")
             return False
 
-    async def configure_assistant(self, system_prompt: str) -> bool:
-        """Patch the Vapi assistant with Max's base persona.
+    async def configure_assistant(self, system_prompt: str, server_tool_url: str | None = None) -> bool:
+        """Patch the Vapi assistant with Max's static persona + get_daily_context tool.
 
-        Called once at startup so the assistant is always correctly configured
-        regardless of whatever was set in the dashboard. Per-call plan content
-        is still injected via assistantOverrides.model.systemPrompt.
+        The system prompt no longer contains plan data. Plan data is fetched live
+        by the assistant via the get_daily_context server tool during each call.
         """
+        from app.adapters.voice.dailyops_prompt import GET_DAILY_CONTEXT_TOOL
+
         if not self.assistant_id:
             return False
         try:
             model_config = await self.get_assistant_model_config()
+
+            tools = []
+            if server_tool_url:
+                tools.append({
+                    "type": "function",
+                    "function": GET_DAILY_CONTEXT_TOOL["function"],
+                    "server": {"url": server_tool_url},
+                })
+
             patch = {
                 "firstMessage": "Hey, it's Max! Ready to run through your day?",
                 "firstMessageMode": "assistant-speaks-first",
@@ -392,6 +398,7 @@ class VapiAdapter(VoiceAdapter):
                     "provider": model_config.get("provider", "openai"),
                     "model": model_config.get("model", "gpt-4o-mini"),
                     "systemPrompt": system_prompt,
+                    "tools": tools,
                 },
             }
             response = await self.http_client.patch(
@@ -399,7 +406,7 @@ class VapiAdapter(VoiceAdapter):
                 json=patch,
             )
             if response.status_code == 200:
-                logger.info("Vapi assistant configured with Max persona")
+                logger.info("Vapi assistant configured with Max persona and get_daily_context tool")
                 return True
             else:
                 logger.error(f"Failed to configure assistant: {response.status_code} {response.text}")

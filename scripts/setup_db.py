@@ -36,6 +36,7 @@ DATABASE_URL = os.getenv("DATABASE_URL", "")
 MIGRATION_FILES = [
     "001_initial_schema.sql",
     "002_conversation_state.sql",
+    "003_daily_context.sql",
 ]
 
 # Fixed UUID for the dev/test user so test-run always links to a real row
