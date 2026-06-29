@@ -8,25 +8,43 @@ from app.services.logger import DebugLogger
 class CalendarMerger:
     """Merge and deduplicate calendar events from multiple sources."""
 
-    TITLE_SIMILARITY_THRESHOLD = 0.8
+    TITLE_SIMILARITY_THRESHOLD = 0.4  # Levenshtein similarity threshold
     TIME_WINDOW_MINUTES = 5
 
     def __init__(self, debug_logger: DebugLogger):
         self.debug_logger = debug_logger
 
     def _string_similarity(self, s1: str, s2: str) -> float:
-        """Calculate string similarity (0.0 to 1.0)."""
+        """Calculate string similarity (0.0 to 1.0) using Levenshtein distance."""
         s1, s2 = s1.lower().strip(), s2.lower().strip()
         if s1 == s2:
             return 1.0
 
-        # Simple Levenshtein-based similarity
         if len(s1) == 0 or len(s2) == 0:
             return 0.0
 
-        # Count matching characters
-        matches = sum(1 for c1, c2 in zip(s1, s2) if c1 == c2)
-        return matches / max(len(s1), len(s2))
+        # Levenshtein distance
+        if len(s1) < len(s2):
+            s1, s2 = s2, s1
+
+        if len(s2) == 0:
+            return 0.0
+
+        # DP table for Levenshtein
+        previous_row = range(len(s2) + 1)
+        for i, c1 in enumerate(s1):
+            current_row = [i + 1] + [0] * len(s2)
+            for j, c2 in enumerate(s2):
+                insertions = previous_row[j + 1] + 1
+                deletions = current_row[j] + 1
+                substitutions = previous_row[j] + (c1 != c2)
+                current_row[j + 1] = min(insertions, deletions, substitutions)
+            previous_row = current_row
+
+        # Convert edit distance to similarity (0-1)
+        distance = previous_row[len(s2)]
+        max_len = max(len(s1), len(s2))
+        return 1.0 - (distance / max_len)
 
     def _should_deduplicate(self, event1: CalendarEvent, event2: CalendarEvent) -> bool:
         """Check if two events should be deduplicated."""
