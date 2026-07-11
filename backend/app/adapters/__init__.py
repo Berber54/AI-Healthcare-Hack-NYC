@@ -1,1 +1,0 @@
-"""Adapter interfaces and implementations."""
