@@ -1,0 +1,59 @@
+:root {
+  --color-ink: #0c0a09;
+  --color-primary: #292524;
+  --color-primary-active: #0c0a09;
+  --color-body: #4e4e4e;
+  --color-muted: #777169;
+  --color-muted-soft: #a8a29e;
+  --color-hairline: #e7e5e4;
+  --color-hairline-soft: #f0efed;
+  --color-hairline-strong: #d6d3d1;
+  --color-canvas: #f5f5f5;
+  --color-canvas-soft: #fafafa;
+  --color-surface-card: #ffffff;
+  --color-surface-strong: #f0efed;
+  --color-on-primary: #ffffff;
+  --color-success: #16a34a;
+  --color-error: #dc2626;
+
+  --font-display: 'EB Garamond', 'Times New Roman', serif;
+  --font-body: 'Inter', sans-serif;
+
+  --rounded-md: 8px;
+  --rounded-xl: 16px;
+  --rounded-xxl: 24px;
+  --rounded-pill: 9999px;
+
+  color-scheme: light;
+  color: var(--color-body);
+  background: var(--color-canvas);
+  font-family: var(--font-body);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100svh;
+}
+
+h1,
+h2 {
+  font-family: var(--font-display);
+  font-weight: 300;
+  color: var(--color-ink);
+  margin: 0;
+}
+
+p {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  letter-spacing: 0.16px;
+}

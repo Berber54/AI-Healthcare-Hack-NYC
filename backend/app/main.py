@@ -5,10 +5,13 @@ from dataclasses import asdict
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import Connect, VoiceResponse
 
+from agent.web_input import router as web_input_router
+from agent.webhook import router as agent_router
 from app.logger import end_call, get_call_log, mark_sms_sent
 from app.sms import compose_post_call_sms, send_post_call_sms
 
@@ -19,6 +22,17 @@ ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID")
 
 app = FastAPI()
+# I.web_input: the React frontend is a separate origin (Vite dev server / static
+# host). MVP scope is one demo deploy, so allow-all is acceptable here — tighten
+# to the deployed frontend origin before this goes beyond the hackathon demo.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+app.include_router(agent_router)
+app.include_router(web_input_router)
 validator = RequestValidator(AUTH_TOKEN)
 logger = logging.getLogger(__name__)
 
