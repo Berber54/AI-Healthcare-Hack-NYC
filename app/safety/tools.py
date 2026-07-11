@@ -74,7 +74,7 @@ def escalate_to_oncall(reason: str, patient_info: dict, urgent: bool = False) ->
         message = _with_one_retry(
             lambda: _get_client().messages.create(
                 to=os.environ["ONCALL_PHONE_NUMBER"],
-                from_=os.environ["TWILIO_FROM_NUMBER"],
+                from_=os.environ["TWILIO_PHONE_NUMBER"],
                 body=body,
             )
         )
