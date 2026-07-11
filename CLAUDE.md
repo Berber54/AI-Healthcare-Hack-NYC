@@ -2,55 +2,54 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Project state
+## What this is
 
-This repository currently contains only [SPEC.md](SPEC.md) — no source code, build tooling, or tests exist yet. Implementation is happening in parallel across team-owned branches (e.g. `feat/safety-escalation`). Read SPEC.md in full before writing code; it is the single source of truth for scope, and its structure (sections `§G/§C/§I/§V/§T/§B`) is referenced by task IDs elsewhere (standups, branch names, commit messages).
+A voice agent that triages and books a dental call in a single phone call, built in a 3-4 hour hackathon window (Healthcare Hack NYC + Twilio Searchlight). **`SPEC.md` is the source of truth** — read it before making non-trivial changes. It defines the goal, constraints, interfaces (I.twilio, I.elevenlabs, I.claude, I.data, I.sms, I.tools, I.logger), 12 numbered invariants, the task list, the 4-person parallel branch split, and a running bugs log.
 
-Since there is no established stack yet, check for a branch/commit that has already made a stack decision (Node/TS vs Python) before introducing a new one, and prefer reusing the pattern from the team's prior `voice-assistant` repo referenced in §C ("port pattern, not literal shared code") — the webhook-per-turn shape, live tool-call dispatch, and ElevenLabs+Twilio provisioning approach.
+Do not treat SPEC.md as documentation to skim once — it is the plan of record. If a change contradicts an invariant or constraint in SPEC.md, stop and flag it rather than silently deviating. If you fix a bug, add an entry to the Bugs table in SPEC.md (ID, date, cause, fix) following the existing B1 pattern.
 
-## The build: dental triage voice agent
+## Commands
 
-Voice agent that triages an inbound call and books a dental appointment, live over Twilio telephony, in a single hackathon build window (Healthcare Hack NYC + Twilio Searchlight prize). No LLM-judged guardrails — the safety-critical path must be deterministic.
+```bash
+# Install deps (from backend/)
+pip install -r requirements.txt
 
-Scope is locked to 5 triage buckets — do not add more mid-build:
-- routine
-- urgent-non-emergency
-- true-emergency (dental)
-- non-dental-red-flag
-- insurance-cost
+# Run the webhook server (from backend/)
+uvicorn app.main:app --reload --port 8000
 
-### Architecture (per §I)
+# Health check
+curl http://localhost:8000/healthz
 
-- **I.twilio** — inbound call routing to a webhook; must support live call transfer.
-- **I.elevenlabs** — STT/TTS for the conversational turn.
-- **I.claude** — Anthropic API as the turn-by-turn decision-maker (triage classification, response generation). This is *not* where safety-critical branching lives — see Invariants below.
-- **I.data** — mock patient/appointment/insurance store (DynamoDB or JSON — pick whichever is fastest to stand up). No real patient data, no real clinical claims.
-- **I.sms** — post-call SMS confirmation/instructions.
-- **I.tools** — live tool calls fired mid-conversation, not deferred to after the call:
-  - `book_appointment(slot, type)`
-  - `book_urgent_slot(reason)`
-  - `escalate_to_oncall(reason, patient_info)`
-  - `transfer_call()`
-  - `check_insurance(plan_id, procedure)`
+# Expose locally for Twilio during dev/demo
+ngrok http 8000
 
-### Safety invariants (§V) — the load-bearing part of this codebase
+# Run the data-layer test suite (from backend/)
+pytest tests -v
+```
 
-The core architectural rule: **red-flag detection is a deterministic keyword/regex layer that runs independently of the LLM, on every user turn, and can override the LLM's discretion.** The LLM decides triage/booking flow for the 4 non-emergency buckets, but it cannot argue its way out of an escalation once the red-flag layer fires.
+Config lives in `.env` (copy from `.env.template`, gitignored). Required: `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_PHONE_NUMBER`, `SUPABASE_URL`, `SUPABASE_KEY` (the `service_role` key — this app has no user auth layer, and RLS is enabled with no policies so only `service_role` can reach the data), plus `NGROK_AUTHTOKEN`/`PUBLIC_BASE_URL` for tunneling.
 
-- V1 — red-flag detector runs every user turn; keyword/regex-based, not model-dependent.
-- V2 — a red-flag firing interrupts the LLM flow and forces a scripted escalation with no LLM discretion.
-- V3 — non-dental red flags (chest pain, breathing trouble, stroke signs) → instruct 911/ER, never attempt booking.
-- V4 — true dental emergencies (avulsed tooth, uncontrolled bleeding, jaw trauma, swelling+fever) → force an emergency slot booking in the same call, plus live transfer or urgent SMS, before the call ends.
-- V5 — caller phone number lookup personalizes the greeting when a patient record matches.
-- V6 — every call outcome is logged: transcript, classification, tool calls, escalation decisions.
-- V7 — every live tool call fires *before* the call ends — "someone will call you back" is never a terminal state without a tool call having fired.
+`backend/tests` is a real integration suite against the live Supabase project (no mocking the DB) — every test skips cleanly, not fails, when `SUPABASE_URL`/`SUPABASE_KEY` are unset. No linter is configured yet.
 
-When implementing anything touching triage or escalation, treat V1–V4 and V7 as hard constraints, not defaults to be relaxed for convenience.
+To (re)provision the Supabase schema/seed data: run `backend/db/schema.sql` then `backend/db/seed.sql` in the Supabase SQL editor, then enable RLS on all three tables (`alter table <name> enable row level security;`, no policies needed).
 
-### Task graph (§T)
+## Architecture
 
-Tasks cite the invariants/interfaces they satisfy — use that mapping to know what "done" means for a task (e.g. T4 cites V1/V2, so a red-flag detector isn't done until it's model-independent and runs every turn). T4 (red-flag detector) is built and isolation-tested *before* T5 wires it into the main call flow — don't skip straight to integration.
+- **Single FastAPI app** at `backend/app/main.py` — currently just the `/voice` webhook and `/healthz`. This will grow into the full Twilio + ElevenLabs webhook handler.
+- **Twilio signature validation is mandatory on every webhook request** (Invariant 8): `verify_twilio_request()` reconstructs the exact request URL (honoring `X-Forwarded-Proto`/`X-Forwarded-Host` since ngrok sits in front) and validates it against `X-Twilio-Signature` via Twilio's `RequestValidator` (HMAC-SHA1 over URL + form params) before any other processing. This is a different scheme from the VoiceAI_Scheduler reference repo's Vapi pattern (raw-body SHA256) — do not port that scheme here.
+- **Safety escalation is deterministic, not LLM-driven** (Invariants 1-4): a regex/keyword red-flag detector must run on every user turn, independent of and able to override the LLM. Non-dental red flags (chest pain, breathing trouble, stroke signs) route to 911/ER with no booking attempt. True dental emergencies force an emergency slot booking plus live transfer/urgent SMS before the call ends. Never implement escalation logic as something the LLM can be argued out of.
+- **Every live tool call must fire before the call ends** (Invariant 7) — "someone will call you back" is never an acceptable terminal state.
+- **Mock EHR only** — Supabase (Postgres) backing `patients`, `appointment_slots`, and `insurance_plans` (schema/seed in `backend/db/`). No real patient data, no real clinical claims. `backend/app/data.py` is the I.data access layer (`get_patient_by_phone`, `get_available_slots`, `book_slot`, `get_insurance_plan`) — other branches should import this rather than querying Supabase directly. `book_slot` guards against double-booking; it raises `SlotAlreadyBookedError` rather than silently overwriting.
+- **Reference repo for porting patterns**: github.com/Khushir474/VoiceAI_Scheduler. Port the *pattern* (agent-turn webhook shape, live tool-call pattern, ElevenLabs+Twilio provisioning, post-call SMS, `logger.py`, `error_recovery.py`), not literal code — it's a separate repo.
+- **Red-flag detector and escalation orchestrator live in `app/safety/`** (`red_flags.py`, `escalation.py`, `tools.py`), separate from `backend/app/`. `red_flags.py` is built and isolation-tested (`tests/test_red_flags.py`) *before* `escalation.py` wires it into the call flow (`tests/test_escalation.py`) — don't skip straight to integration when extending it. Treat Invariants 1-4 and 7 as hard constraints here, not defaults to relax for convenience.
 
-### Bugs log (§B)
+## Explicit non-goals (do not build these)
 
-SPEC.md has a `§B Bugs` table (id/date/cause/fix) — check it for known issues before debugging something that's already been diagnosed, and append to it (don't just fix silently) when you resolve a non-obvious bug during the hackathon build.
+- Custom barge-in implementation — only if ElevenLabs' agent config lacks a native flag for it (Invariant 10).
+- An FSM-based conversation state machine (like VoiceAI_Scheduler's `conversation_state_machine.py`) — the LLM plus the deterministic regex layer is considered sufficient for this build.
+- An adapter-pattern (base + implementation split) abstraction layer.
+- Load testing or scaling beyond a single concurrent caller — keep the data layer/webhook handler stateless/swappable so scaling later is a config change, not a rewrite, but don't build the scaling itself now.
+
+## Branch structure
+
+Four parallel feature branches split by owner, merging into `main` before end-to-end testing (T7): `feat/telephony`, `feat/data-knowledge`, `feat/triage-conversation`, `feat/safety-escalation`. See SPEC.md's "Parallel Branches" table for exactly which invariants/tasks each branch owns before touching cross-branch concerns.
