@@ -64,7 +64,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | ID | Status | Description | Cites |
 |----|--------|-------------|-------|
 | T1 | In progress | Twilio number + webhook reachable, scripted greeting smoke test | I.twilio |
-| T2 | Not started | Mock data: 3–5 patients, appointment slots, one insurance plan | I.data |
+| T2 | Done | Mock data: 5 patients, 10 appointment slots (routine/urgent/emergency), one insurance plan — schema + seed in `backend/db/`, exposed via `backend/app/data.py`, verified by `backend/tests/` (12 passing against a live Supabase project) | I.data |
 | T3 | Not started | Triage prompt + 4 non-emergency buckets (routine/urgent/insurance/booking) working end to end | Invariant 5, I.claude |
 | T4 | Not started | Red-flag detector built and tested in isolation before wiring into the main flow | Invariants 1, 2 |
 | T5 | Not started | Emergency escalation path wired into the call flow (dental emergency + non-dental red flag) | Invariants 3, 4 |
@@ -92,3 +92,4 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | ID | Date | Cause | Fix |
 |----|------|-------|-----|
 | B1 | 2026-07-11 | `POST /voice` returned 500 — Starlette's `request.form()` needs the `python-multipart` package to parse Twilio's `application/x-www-form-urlencoded` body, which wasn't in `backend/requirements.txt` | Added `python-multipart==0.0.20` to `backend/requirements.txt` and reinstalled |
+| B2 | 2026-07-11 | `backend/tests` errored instead of skipping when `SUPABASE_URL`/`SUPABASE_KEY` were unset — the session-scoped `supabase_client` fixture was instantiated before the function-scoped autouse skip check ran, so tests requesting it directly hit `SupabaseException` instead of a clean skip | Added the same env-var guard directly inside the `supabase_client` fixture in `backend/tests/conftest.py`, so it skips independently of fixture ordering |
