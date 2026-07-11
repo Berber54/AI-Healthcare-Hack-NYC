@@ -1,10 +1,5 @@
-"""System prompt for the 4 non-emergency triage buckets (T3).
-
-Emergency + non-dental red-flag buckets are handled by the deterministic
-regex layer (feat/safety-escalation, Person D) before this prompt ever
-runs — see SPEC.md Invariants 1-4. This prompt only ever sees turns that
-already passed the red-flag check.
-"""
+# Red-flag/emergency buckets never reach this prompt — regex layer in
+# feat/safety-escalation filters them first (SPEC.md Invariants 1-4).
 
 TRIAGE_SYSTEM_PROMPT = """You are a dental office triage assistant answering an inbound call.
 
@@ -41,11 +36,7 @@ Rules:
 
 
 def build_greeting_context(patient: dict | None) -> str:
-    """Build the personalization block injected into the first turn (Invariants 5, 9).
-
-    `patient` is the joined patient+insurance record from I.data, or None for
-    an unrecognized number (fresh generic greeting, no personalization).
-    """
+    # Invariants 5, 9: personalize first turn if phone number matched a patient.
     if patient is None:
         return "Caller phone number did not match any patient record. Use a generic greeting."
 

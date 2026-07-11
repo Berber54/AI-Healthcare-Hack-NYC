@@ -1,13 +1,6 @@
-"""Tool schemas for the 3 non-emergency tools this branch owns (I.tools).
-
-`escalate_to_oncall` and `transfer_call` belong to feat/safety-escalation
-(Person D) — not defined here.
-
-NOT YET WIRED into the webhook turn loop: that needs the payload/response
-contract from T1 (feat/telephony), which hasn't landed yet. This is the
-Claude tool-use schema only, ready to plug in once the webhook contract
-exists.
-"""
+# 3 non-emergency tools (I.tools). escalate_to_oncall/transfer_call belong
+# to feat/safety-escalation. Not wired into the webhook loop yet — needs
+# T1's payload contract first.
 
 TRIAGE_TOOLS = [
     {
