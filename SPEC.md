@@ -71,6 +71,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | T6 | Not started | Post-call SMS + call logging | Invariant 6, I.sms |
 | T7 | Not started | End-to-end test calls: one routine call, one emergency call — fix rough edges | T1, T3, T4, T5 |
 | T8 | Not started | Demo script rehearsal (2 calls; the emergency call must trigger live escalation on stage, not just be described) + Devpost writeup | T7, Invariants 3, 4 |
+| T1b | Blocked on ELEVENLABS_AGENT_ID | `/voice` needs `<Connect><Stream>` to the ElevenLabs Conversational AI agent so `agent/webhook.py` tool calls actually get hit by real traffic — code is written (falls back to scripted `<Say>` per Invariant 12 if unconfigured), needs Person C's agent ID + an API key to go live | T1, I.elevenlabs, `agent/webhook.py` |
 
 ## Parallel Branches — 4-Person Split
 
