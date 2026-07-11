@@ -10,9 +10,17 @@ from agent import session_store
 from agent.triage_prompt import TRIAGE_SYSTEM_PROMPT, build_greeting_context
 from agent.triage_tools import TRIAGE_TOOLS
 from app import data
+from app.logger import log_classification, log_escalation, log_tool_call, log_turn, start_call
 from app.safety.contract import CallContext
 from app.safety.escalation import handle_red_flag_turn
 from app.safety.red_flags import check_red_flag
+
+# Invariant 6: which tool a turn calls implies its triage bucket.
+_TOOL_TO_BUCKET = {
+    "book_appointment": "booking",
+    "book_urgent_slot": "urgent",
+    "check_insurance": "insurance",
+}
 
 router = APIRouter()
 
@@ -26,10 +34,9 @@ def _get_anthropic_client() -> anthropic.Anthropic:
     return _anthropic_client
 
 
-def _lookup_patient(caller_id: str) -> dict | None:
+def _greeting_context_from_patient(patient: data.Patient | None) -> dict | None:
     # Invariants 5, 9: greeting context needs name + last-visit + insurance,
     # not just a patient match.
-    patient = data.get_patient_by_phone(caller_id)
     if patient is None:
         return None
 
@@ -51,7 +58,8 @@ def _lookup_patient(caller_id: str) -> dict | None:
 async def personalize(body: dict):
     # Invariants 5, 9: ElevenLabs calls this before the call connects (native
     # Twilio integration bypasses our /voice route — see SPEC.md Invariant 8 note).
-    patient = _lookup_patient(body["caller_id"])
+    raw_patient = data.get_patient_by_phone(body["caller_id"]) if body.get("caller_id") else None
+    patient = _greeting_context_from_patient(raw_patient)
 
     # I.web_input: link call_sid <-> caller phone so the web input bar and the
     # get_web_input tool can find each other. TODO(T6, Person B): send the
@@ -59,6 +67,13 @@ async def personalize(body: dict):
     call_sid = body.get("call_sid")
     if call_sid:
         session_store.link_call(call_sid, body.get("caller_id"))
+        # Invariants 6, 11: the call log starts here so a transcript exists
+        # even if the caller hangs up before any tool call fires.
+        start_call(
+            run_id=call_sid,
+            phone_number=body.get("caller_id") or "",
+            patient_id=raw_patient.id if raw_patient else None,
+        )
 
     return {
         "type": "conversation_initiation_client_data",
@@ -92,9 +107,12 @@ def _last_user_text(messages: list[dict]) -> str:
     return ""
 
 
-def _call_context_from_request(body: dict) -> CallContext:
+def _call_sid_from_request(body: dict) -> str:
     extra = body.get("elevenlabs_extra_body") or {}
-    call_sid = extra.get("call_sid") or body.get("user_id") or "unknown"
+    return extra.get("call_sid") or body.get("user_id") or "unknown"
+
+
+def _call_context_from_request(body: dict, call_sid: str) -> CallContext:
     phone = session_store.get_phone(call_sid)
     patient = data.get_patient_by_phone(phone) if phone else None
     return CallContext(
@@ -107,12 +125,20 @@ def _call_context_from_request(body: dict) -> CallContext:
 
 @router.post("/elevenlabs/v1/chat/completions")
 async def chat_completions(body: dict):
+    call_sid = _call_sid_from_request(body)
+    user_text = _last_user_text(body.get("messages", []))
+    if call_sid != "unknown":
+        log_turn(call_sid, "caller", user_text)
+
     # Invariants 1, 2: the red-flag check runs on every turn before Claude
     # ever sees it — the LLM gets no discretion over escalation (I.claude).
-    result = check_red_flag(_last_user_text(body.get("messages", [])))
+    result = check_red_flag(user_text)
 
     if result.is_red_flag:
-        outcome = handle_red_flag_turn(result, _call_context_from_request(body))
+        outcome = handle_red_flag_turn(result, _call_context_from_request(body, call_sid))
+        if call_sid != "unknown":
+            log_escalation(call_sid, outcome.category.value, ",".join(result.matched_keywords))
+            log_turn(call_sid, "agent", outcome.message)
 
         async def escalation_stream():
             yield _sse_chunk(content=outcome.message)
@@ -153,6 +179,13 @@ async def chat_completions(body: dict):
                 yield "data: [DONE]\n\n"
 
             return StreamingResponse(fallback_stream(), media_type="text/event-stream")
+
+    if call_sid != "unknown":
+        for block in response.content:
+            if block.type == "text" and block.text:
+                log_turn(call_sid, "agent", block.text)
+            elif block.type == "tool_use" and block.name in _TOOL_TO_BUCKET:
+                log_classification(call_sid, _TOOL_TO_BUCKET[block.name])
 
     async def claude_stream():
         for block in response.content:
@@ -227,4 +260,11 @@ async def call_tool(tool_name: str, body: dict):
     handler = TOOL_HANDLERS.get(tool_name)
     if handler is None:
         return {"error": f"unknown tool {tool_name}"}
-    return {"result": handler(body["parameters"], body)}
+    result = handler(body["parameters"], body)
+
+    # Invariant 6: every live tool call is recorded against the run's log.
+    call_sid = body["parameters"].get("call_sid") or _call_sid_from_request(body)
+    if call_sid != "unknown":
+        log_tool_call(call_sid, tool_name, body["parameters"], result)
+
+    return {"result": result}
