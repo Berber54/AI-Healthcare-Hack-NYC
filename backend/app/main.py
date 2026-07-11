@@ -1,4 +1,6 @@
+import logging
 import os
+from dataclasses import asdict
 
 import httpx
 from dotenv import load_dotenv
@@ -10,6 +12,8 @@ from twilio.twiml.voice_response import Connect, VoiceResponse
 
 from agent.web_input import router as web_input_router
 from agent.webhook import router as agent_router
+from app.logger import end_call, get_call_log, mark_sms_sent
+from app.sms import compose_post_call_sms, send_post_call_sms
 
 load_dotenv()
 
@@ -30,6 +34,7 @@ app.add_middleware(
 app.include_router(agent_router)
 app.include_router(web_input_router)
 validator = RequestValidator(AUTH_TOKEN)
+logger = logging.getLogger(__name__)
 
 FALLBACK_GREETING = (
     "Thanks for calling the dental office. We're having trouble connecting "
@@ -91,3 +96,38 @@ async def voice(request: Request):
     else:
         response.say(FALLBACK_GREETING)
     return Response(content=str(response), media_type="application/xml")
+
+
+@app.post("/call-status")
+async def call_status(request: Request):
+    """Twilio call-status callback (I.sms). Fires the post-call SMS and closes
+    out the call log when Twilio reports the call as completed, independent of
+    whatever conversation flow ran the call."""
+    params = await verify_twilio_request(request)
+    run_id = params.get("CallSid")
+
+    if params.get("CallStatus") == "completed" and run_id:
+        call_log = get_call_log(run_id)
+        to_number = call_log.phone_number if call_log else params.get("From")
+        if to_number:
+            try:
+                send_post_call_sms(to_number, compose_post_call_sms(call_log))
+                if call_log:
+                    mark_sms_sent(run_id)
+            except Exception:
+                # Invariant 12: never crash the webhook on an SMS failure - log
+                # and move on, don't take down call-status handling with it.
+                logger.error("post-call SMS failed for run_id=%s", run_id, exc_info=True)
+        if call_log:
+            end_call(run_id)
+
+    return Response(status_code=204)
+
+
+@app.get("/calls/{run_id}")
+def get_call(run_id: str):
+    """Invariant 11: the call log is visibly viewable as plain JSON."""
+    call_log = get_call_log(run_id)
+    if call_log is None:
+        raise HTTPException(status_code=404, detail=f"No call log for run_id {run_id}")
+    return asdict(call_log)

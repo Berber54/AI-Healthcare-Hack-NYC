@@ -1,5 +1,7 @@
 import io
 import os
+import re
+from urllib.parse import quote
 
 import pdfplumber
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -12,6 +14,7 @@ router = APIRouter()
 # frontend/ (React, `npx getdesign@latest add elevenlabs` styling) is the real
 # UI; this backend route just redirects the SMS link to it.
 FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173")
+CALL_SID_PATTERN = re.compile(r"^CA[0-9a-fA-F]{32}$")
 
 
 def _extract_pdf_text(raw: bytes) -> str | None:
@@ -24,7 +27,9 @@ def _extract_pdf_text(raw: bytes) -> str | None:
 
 @router.get("/input/{call_sid}")
 async def input_page(call_sid: str):
-    return RedirectResponse(f"{FRONTEND_BASE_URL}/call/{call_sid}")
+    if not CALL_SID_PATTERN.fullmatch(call_sid):
+        raise HTTPException(status_code=400, detail="Invalid call SID")
+    return RedirectResponse(f"{FRONTEND_BASE_URL}/call/{quote(call_sid, safe='')}")
 
 
 @router.post("/input/lookup")
