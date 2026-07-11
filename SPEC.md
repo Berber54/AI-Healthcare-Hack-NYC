@@ -54,6 +54,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 6. Every call outcome is logged: transcript, classification, tool calls, and escalation decisions. *(depends on I.data)*
 7. Every live tool call fires before the call ends — "someone will call you back" is never an acceptable terminal state. *(depends on I.tools)*
 8. Twilio webhook requests are validated via Twilio's `RequestValidator` (URL + params, HMAC-SHA1) before processing. Note this differs from VoiceAI_Scheduler's Vapi pattern, which validates the raw body with SHA256 — don't copy that scheme directly. *(depends on I.twilio)*
+   - **⚠️ Needs team discussion:** the number is set up via ElevenLabs' native Twilio integration (imported into their dashboard, `voice_url` = `https://api.us.elevenlabs.io/twilio/inbound_call`) — Twilio calls ElevenLabs directly for the live voice path, never our own `/voice`. Our `RequestValidator` check exists and works (verified via simulated signed request) but currently sits on a webhook Twilio never hits for real calls. Need to decide: accept that ElevenLabs' side handles Twilio validation itself, or reroute voice through our webhook (loses ElevenLabs' native Media Streams handling — see B2 below). `agent/webhook.py`'s tool-call endpoint is unaffected either way; ElevenLabs calls that directly regardless of how the voice leg is routed.
 9. When a patient record matches, the first turn pulls in last-visit and insurance context — not just a name in the greeting. *(depends on Invariant 5 and I.data)*
 10. Barge-in / mid-response interruption is supported if the ElevenLabs agent config exposes a native flag for it. No custom build if that flag is absent. *(depends on I.elevenlabs)*
 11. The call transcript/log is visibly viewable (plain JSON or a simple view) — not just stored. *(depends on Invariant 6 and I.data)*
@@ -63,7 +64,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 
 | ID | Status | Description | Cites |
 |----|--------|-------------|-------|
-| T1 | In progress | Twilio number + webhook reachable, scripted greeting smoke test | I.twilio |
+| T1 | Verified via simulated signed request; pending real phone call confirmation | Twilio number + webhook reachable, scripted greeting smoke test | I.twilio |
 | T2 | Not started | Mock data: 3–5 patients, appointment slots, one insurance plan | I.data |
 | T3 | Not started | Triage prompt + 4 non-emergency buckets (routine/urgent/insurance/booking) working end to end | Invariant 5, I.claude |
 | T4 | Not started | Red-flag detector built and tested in isolation before wiring into the main flow | Invariants 1, 2 |
@@ -71,6 +72,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | T6 | Not started | Post-call SMS + call logging | Invariant 6, I.sms |
 | T7 | Not started | End-to-end test calls: one routine call, one emergency call — fix rough edges | T1, T3, T4, T5 |
 | T8 | Not started | Demo script rehearsal (2 calls; the emergency call must trigger live escalation on stage, not just be described) + Devpost writeup | T7, Invariants 3, 4 |
+| T1b | Verified via simulated signed request; pending real phone call confirmation | `/voice` hands off to the ElevenLabs Conversational AI agent via `<Connect><Stream>` so `agent/webhook.py` tool calls get hit by real traffic; falls back to scripted `<Say>` per Invariant 12 if ElevenLabs is unconfigured/unreachable | T1, I.elevenlabs, `agent/webhook.py` |
 
 ## Parallel Branches — 4-Person Split
 
@@ -92,3 +94,4 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | ID | Date | Cause | Fix |
 |----|------|-------|-----|
 | B1 | 2026-07-11 | `POST /voice` returned 500 — Starlette's `request.form()` needs the `python-multipart` package to parse Twilio's `application/x-www-form-urlencoded` body, which wasn't in `backend/requirements.txt` | Added `python-multipart==0.0.20` to `backend/requirements.txt` and reinstalled |
+| B2 | 2026-07-11 | Real call ended instantly, Twilio error 31921 (Stream WebSocket closed by remote). `/voice`'s `<Connect><Stream>` pointed at ElevenLabs' raw Conversational AI websocket (`/v1/convai/conversation`), which speaks ElevenLabs' client protocol, not Twilio's Media Streams protocol — no custom relay is a documented/supported path | The number was already imported into ElevenLabs' native Twilio integration and assigned to the agent (done via their dashboard, not by us); `voice_url` now correctly points at `https://api.us.elevenlabs.io/twilio/inbound_call`, bypassing our `/voice` entirely for the live call. See Invariant 8 note above — our `<Connect><Stream>` code in `/voice` is now unused for the real call path. |

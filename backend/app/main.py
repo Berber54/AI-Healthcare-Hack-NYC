@@ -1,17 +1,25 @@
 import os
 
+import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import Response
 from twilio.request_validator import RequestValidator
-from twilio.twiml.voice_response import VoiceResponse
+from twilio.twiml.voice_response import Connect, VoiceResponse
 
 load_dotenv()
 
 AUTH_TOKEN = os.environ["TWILIO_AUTH_TOKEN"]
+ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
+ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID")
 
 app = FastAPI()
 validator = RequestValidator(AUTH_TOKEN)
+
+FALLBACK_GREETING = (
+    "Thanks for calling the dental office. We're having trouble connecting "
+    "you to the assistant right now. Please call back in a few minutes. Goodbye."
+)
 
 
 async def verify_twilio_request(request: Request) -> dict:
@@ -36,13 +44,35 @@ def healthz():
     return {"status": "ok"}
 
 
+async def _get_elevenlabs_stream_url() -> str | None:
+    """Signed WebSocket URL for the configured ElevenLabs Conversational AI
+    agent. Returns None if unconfigured or the handshake fails, so /voice can
+    fall back to a scripted response (Invariant 12) instead of a dead call."""
+    if not ELEVENLABS_AGENT_ID or not ELEVENLABS_API_KEY:
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(
+                "https://api.elevenlabs.io/v1/convai/conversation/get_signed_url",
+                params={"agent_id": ELEVENLABS_AGENT_ID},
+                headers={"xi-api-key": ELEVENLABS_API_KEY},
+            )
+            resp.raise_for_status()
+            return resp.json()["signed_url"]
+    except (httpx.HTTPError, KeyError):
+        return None
+
+
 @app.post("/voice")
 async def voice(request: Request):
     await verify_twilio_request(request)
 
     response = VoiceResponse()
-    response.say(
-        "Thanks for calling the dental office. This is a test greeting for "
-        "the telephony smoke test. Goodbye.",
-    )
+    stream_url = await _get_elevenlabs_stream_url()
+    if stream_url:
+        connect = Connect()
+        connect.stream(url=stream_url)
+        response.append(connect)
+    else:
+        response.say(FALLBACK_GREETING)
     return Response(content=str(response), media_type="application/xml")
