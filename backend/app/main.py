@@ -7,6 +7,8 @@ from fastapi.responses import Response
 from twilio.request_validator import RequestValidator
 from twilio.twiml.voice_response import Connect, VoiceResponse
 
+from agent.webhook import router as agent_router
+
 load_dotenv()
 
 AUTH_TOKEN = os.environ["TWILIO_AUTH_TOKEN"]
@@ -14,6 +16,7 @@ ELEVENLABS_API_KEY = os.environ.get("ELEVENLABS_API_KEY")
 ELEVENLABS_AGENT_ID = os.environ.get("ELEVENLABS_AGENT_ID")
 
 app = FastAPI()
+app.include_router(agent_router)
 validator = RequestValidator(AUTH_TOKEN)
 
 FALLBACK_GREETING = (
