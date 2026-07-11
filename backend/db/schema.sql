@@ -24,3 +24,19 @@ create table appointment_slots (
     patient_id uuid references patients(id),
     booking_reason text
 );
+
+-- T6 call log (I.logger). run_id is the Twilio CallSid, so it's the natural
+-- primary key across the multiple webhook hits that make up one call.
+create table call_logs (
+    run_id text primary key,
+    phone_number text not null,
+    patient_id uuid references patients(id),
+    started_at timestamptz not null default now(),
+    ended_at timestamptz,
+    status text not null default 'in_progress' check (status in ('in_progress', 'completed')),
+    transcript jsonb not null default '[]'::jsonb,
+    classification text,
+    tool_calls jsonb not null default '[]'::jsonb,
+    escalations jsonb not null default '[]'::jsonb,
+    sms_sent boolean not null default false
+);
