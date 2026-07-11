@@ -63,7 +63,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 
 | ID | Status | Description | Cites |
 |----|--------|-------------|-------|
-| T1 | Not started | Twilio number + webhook reachable, scripted greeting smoke test | I.twilio |
+| T1 | In progress | Twilio number + webhook reachable, scripted greeting smoke test | I.twilio |
 | T2 | Not started | Mock data: 3–5 patients, appointment slots, one insurance plan | I.data |
 | T3 | Not started | Triage prompt + 4 non-emergency buckets (routine/urgent/insurance/booking) working end to end | Invariant 5, I.claude |
 | T4 | Not started | Red-flag detector built and tested in isolation before wiring into the main flow | Invariants 1, 2 |
@@ -91,4 +91,4 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 
 | ID | Date | Cause | Fix |
 |----|------|-------|-----|
-| — | — | — | — |
+| B1 | 2026-07-11 | `POST /voice` returned 500 — Starlette's `request.form()` needs the `python-multipart` package to parse Twilio's `application/x-www-form-urlencoded` body, which wasn't in `backend/requirements.txt` | Added `python-multipart==0.0.20` to `backend/requirements.txt` and reinstalled |
