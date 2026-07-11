@@ -92,3 +92,5 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | ID | Date | Cause | Fix |
 |----|------|-------|-----|
 | B1 | 2026-07-11 | `POST /voice` returned 500 — Starlette's `request.form()` needs the `python-multipart` package to parse Twilio's `application/x-www-form-urlencoded` body, which wasn't in `backend/requirements.txt` | Added `python-multipart==0.0.20` to `backend/requirements.txt` and reinstalled |
+| B2 | 2026-07-11 | Red-flag detector's `swelling_with_fever` combo matched on the literal substring "fever" even inside a negated phrase (e.g. "swollen but no fever"), misfiring `DENTAL_EMERGENCY` on a routine turn | Added a negation guard (`_present_and_not_negated`) that skips a symptom match if a negation word appears immediately before it |
+| B3 | 2026-07-11 | Red-flag detector's `stroke_signs` pattern only matched literal phrases "face...droop" (trailing `\b` broke on "drooping") and "slurred speech" (failed on reversed word order "speech is slurred") — real caller phrasing was silently missed | Rewrote pattern to match either word order and verb inflection (`droop\w*`, `slurr\w*`) instead of one literal phrase |
