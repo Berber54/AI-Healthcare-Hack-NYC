@@ -23,12 +23,18 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
   - An FSM-based conversation state machine (the pattern used in VoiceAI_Scheduler's `conversation_state_machine.py`) — too heavy for a 3–4 hour window; the LLM plus a deterministic regex layer is sufficient.
   - An adapter-pattern abstraction (base + implementation split) — adds cost the MVP can't afford.
 
+## Techstack
+
+- **Server:** Python + FastAPI — webhook handler for Twilio + ElevenLabs. Chosen to port `logger.py` and `error_recovery.py` from VoiceAI_Scheduler near-verbatim instead of translating to another language.
+- **Data:** Supabase (Postgres) for the mock EHR (patients, appointment slots, insurance plan).
+- **Hosting (build + demo):** ngrok tunnel to localhost. Start it well before stage time to derisk tunnel drop mid-demo.
+
 ## Interfaces
 
 - **I.twilio** — inbound call routing to the webhook, with live transfer capability.
 - **I.elevenlabs** — STT/TTS conversational agent.
 - **I.claude** — Anthropic API, acting as the turn-by-turn decision-maker.
-- **I.data** — mock patient/appointment/insurance store (DynamoDB or JSON — pick whichever is fastest to stand up).
+- **I.data** — mock patient/appointment/insurance store, backed by Supabase (Postgres).
 - **I.sms** — post-call SMS confirmation and instructions.
 - **I.tools** — live tool calls fired mid-conversation:
   - `book_appointment(slot, type)`
