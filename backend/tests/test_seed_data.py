@@ -1,3 +1,8 @@
+import pytest
+
+pytestmark = pytest.mark.requires_supabase
+
+
 def test_patient_count_between_3_and_5(supabase_client):
     result = supabase_client.table("patients").select("id").execute()
     assert 3 <= len(result.data) <= 5

@@ -8,6 +8,8 @@ from app.data import (
     get_patient_by_phone,
 )
 
+pytestmark = pytest.mark.requires_supabase
+
 SEEDED_PHONE = "+15550100001"
 SEEDED_NAME = "Jane Doe"
 

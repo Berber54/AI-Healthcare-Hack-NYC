@@ -10,8 +10,8 @@ SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 
 @pytest.fixture(autouse=True)
-def _skip_without_supabase():
-    if not SUPABASE_URL or not SUPABASE_KEY:
+def _skip_without_supabase(request):
+    if request.node.get_closest_marker("requires_supabase") and not (SUPABASE_URL and SUPABASE_KEY):
         pytest.skip("SUPABASE_URL/SUPABASE_KEY not set - skipping data-layer tests")
 
 

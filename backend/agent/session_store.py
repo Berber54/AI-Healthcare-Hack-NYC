@@ -15,6 +15,10 @@ def resolve_call_sid(phone: str) -> str | None:
     return _phone_to_call_sid.get(phone)
 
 
+def get_phone(call_sid: str) -> str | None:
+    return _sessions.get(call_sid, {}).get("phone")
+
+
 def add_text(call_sid: str, text: str) -> None:
     session = _sessions.setdefault(call_sid, {"phone": None, "entries": []})
     session["entries"].append({"type": "text", "value": text})

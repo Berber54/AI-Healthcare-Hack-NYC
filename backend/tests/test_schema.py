@@ -1,5 +1,7 @@
 import pytest
 
+pytestmark = pytest.mark.requires_supabase
+
 
 def test_tables_are_queryable(supabase_client):
     assert supabase_client.table("patients").select("*").limit(0).execute() is not None
