@@ -1,8 +1,25 @@
 from fastapi import APIRouter
 
+from agent.triage_prompt import build_greeting_context
+
 router = APIRouter()
 
 # TODO(T2): replace stub returns once Person B's Supabase mock EHR lands.
+
+
+def _lookup_patient(caller_id: str) -> dict | None:
+    return None  # TODO(T2): query Supabase patient_with_insurance view by caller_id
+
+
+@router.post("/elevenlabs/personalize")
+async def personalize(body: dict):
+    # Invariants 5, 9: ElevenLabs calls this before the call connects (native
+    # Twilio integration bypasses our /voice route — see SPEC.md Invariant 8 note).
+    patient = _lookup_patient(body["caller_id"])
+    return {
+        "type": "conversation_initiation_client_data",
+        "dynamic_variables": {"greeting_context": build_greeting_context(patient)},
+    }
 
 
 def _book_appointment(params: dict) -> dict:
