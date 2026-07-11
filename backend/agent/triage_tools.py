@@ -38,4 +38,20 @@ TRIAGE_TOOLS = [
             "required": ["plan_id", "procedure"],
         },
     },
+    {
+        "name": "get_web_input",
+        "description": (
+            "Check what the caller has typed or uploaded (insurance ID, PDF, photo) via the "
+            "web input link shared at the start of the call. Call this whenever the caller says "
+            "they've sent, typed, or uploaded something, or before asking them to spell out "
+            "something like an insurance number that's easier to read than to say."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "call_sid": {"type": "string", "description": "{{call_sid}} from the conversation's dynamic variables"},
+            },
+            "required": ["call_sid"],
+        },
+    },
 ]
