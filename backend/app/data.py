@@ -11,6 +11,8 @@ from typing import Optional
 
 from supabase import Client, create_client
 
+from app.error_recovery import retry_once
+
 _client: Optional[Client] = None
 
 
@@ -52,18 +54,22 @@ class Slot:
 
 
 def get_patient_by_phone(phone: str) -> Optional[Patient]:
-    result = _get_client().table("patients").select("*").eq("phone_number", phone).execute()
-    if not result.data:
-        return None
-    return _row_to_patient(result.data[0])
+    def _read():
+        result = _get_client().table("patients").select("*").eq("phone_number", phone).execute()
+        return _row_to_patient(result.data[0]) if result.data else None
+
+    return retry_once(_read, fallback=None)
 
 
 def get_available_slots(slot_type: Optional[str] = None) -> list[Slot]:
-    query = _get_client().table("appointment_slots").select("*").eq("is_booked", False)
-    if slot_type is not None:
-        query = query.eq("slot_type", slot_type)
-    result = query.order("start_time").execute()
-    return [_row_to_slot(row) for row in result.data]
+    def _read():
+        query = _get_client().table("appointment_slots").select("*").eq("is_booked", False)
+        if slot_type is not None:
+            query = query.eq("slot_type", slot_type)
+        result = query.order("start_time").execute()
+        return [_row_to_slot(row) for row in result.data]
+
+    return retry_once(_read, fallback=[])
 
 
 def book_slot(slot_id: str, patient_id: str, reason: Optional[str] = None) -> Slot:
@@ -90,11 +96,14 @@ def book_slot(slot_id: str, patient_id: str, reason: Optional[str] = None) -> Sl
     return _row_to_slot(result.data[0])
 
 
-def get_insurance_plan() -> InsurancePlan:
-    result = _get_client().table("insurance_plans").select("*").limit(1).execute()
-    if not result.data:
-        raise LookupError("No insurance plan seeded")
-    return _row_to_plan(result.data[0])
+def get_insurance_plan() -> Optional[InsurancePlan]:
+    def _read():
+        result = _get_client().table("insurance_plans").select("*").limit(1).execute()
+        if not result.data:
+            raise LookupError("No insurance plan seeded")
+        return _row_to_plan(result.data[0])
+
+    return retry_once(_read, fallback=None)
 
 
 def _row_to_patient(row: dict) -> Patient:

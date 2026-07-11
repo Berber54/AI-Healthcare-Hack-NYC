@@ -6,3 +6,8 @@ venv/
 node_modules/
 .DS_Store
 *.log
+
+# Claude Code / agent tooling artifacts (local only)
+.claude/
+.agents/
+skills-lock.json
