@@ -44,7 +44,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
   - `check_insurance(plan_id, procedure)`
   - `get_web_input(call_sid)`
 - **I.logger** — structured, run_id-keyed event log (pattern ported from VoiceAI_Scheduler's `services/logger.py`). Backs Invariants 6, 11, and 12.
-- **I.web_input** — browser page (`/input/{call_sid}`) the caller can open mid-call to type text or upload a PDF/image (insurance card, ID) that the agent reads via the `get_web_input` tool. Linked by `call_sid`, captured from ElevenLabs' personalization webhook; `/input/lookup` (phone number) is the fallback if the caller never got a `call_sid` link. In-memory session store (`agent/session_store.py`) matches the single-concurrent-caller MVP scale target — swap for Supabase/Redis later without touching callers. PDF text is extracted with `pdfplumber`; images are stored with filename only, no OCR, to avoid a Tesseract system dependency on demo day.
+- **I.web_input** — `frontend/` React app (Vite, styled from `npx getdesign@latest add elevenlabs` tokens in `frontend/DESIGN.md`) at `/call/{call_sid}` the caller can open mid-call to type text or upload a PDF/image (insurance card, ID) that the agent reads via the `get_web_input` tool. Backend's `GET /input/{call_sid}` (`agent/web_input.py`) redirects to it — that's what an SMS link would point at once T6 lands. Linked by `call_sid`, captured from ElevenLabs' personalization webhook; the frontend's `/` phone-lookup page (calling `POST /input/lookup`) is the fallback if the caller never got a `call_sid` link. In-memory session store (`agent/session_store.py`) matches the single-concurrent-caller MVP scale target — swap for Supabase/Redis later without touching callers. PDF text is extracted with `pdfplumber`; images are stored with filename only, no OCR, to avoid a Tesseract system dependency on demo day. Backend allows all CORS origins for now (`backend/app/main.py`) since the frontend is a separate origin — tighten before this goes past the hackathon demo.
 
 ## Invariants
 
@@ -75,7 +75,7 @@ Build a voice agent that triages and books a dental call, start to finish, in a 
 | T7 | Not started | End-to-end test calls: one routine call, one emergency call — fix rough edges | T1, T3, T4, T5 |
 | T8 | Not started | Demo script rehearsal (2 calls; the emergency call must trigger live escalation on stage, not just be described) + Devpost writeup | T7, Invariants 3, 4 |
 | T1b | Verified via simulated signed request; pending real phone call confirmation | `/voice` hands off to the ElevenLabs Conversational AI agent via `<Connect><Stream>` so `agent/webhook.py` tool calls get hit by real traffic; falls back to scripted `<Say>` per Invariant 12 if ElevenLabs is unconfigured/unreachable | T1, I.elevenlabs, `agent/webhook.py` |
-| T9 | Built, smoke-tested via FastAPI TestClient; pending real-call verification | Web input bar: `/input/{call_sid}` page + `get_web_input` tool so the caller can type or upload (PDF/image) info mid-call for the agent to read | I.web_input |
+| T9 | Built, verified end-to-end in browser (text submit + phone-lookup fallback) against the live backend; PDF upload path unit-tested, pending real-call verification | Web input bar: `frontend/` React app (`/call/{call_sid}` + `/` phone lookup) + `get_web_input` tool so the caller can type or upload (PDF/image) info mid-call for the agent to read | I.web_input |
 
 ## Parallel Branches — 4-Person Split
 

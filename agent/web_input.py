@@ -1,34 +1,17 @@
 import io
+import os
 
 import pdfplumber
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import HTMLResponse
+from fastapi.responses import RedirectResponse
 
 from agent import session_store
 
 router = APIRouter()
 
-INPUT_PAGE = """<!doctype html>
-<html><head><title>Share info with your call</title></head>
-<body style="font-family: sans-serif; max-width: 480px; margin: 40px auto;">
-  <h2>Share info with the agent</h2>
-  <p>Whatever you enter here, the agent on your call can read it live.</p>
-  <form id="f" enctype="multipart/form-data">
-    <textarea name="text" rows="4" style="width:100%" placeholder="e.g. insurance member ID"></textarea><br>
-    <input type="file" name="file" accept=".pdf,.png,.jpg,.jpeg"><br><br>
-    <button type="submit">Send to agent</button>
-  </form>
-  <p id="status"></p>
-  <script>
-    const callSid = {call_sid!r};
-    document.getElementById('f').onsubmit = async (e) => {
-      e.preventDefault();
-      const res = await fetch(`/input/${callSid}`, { method: 'POST', body: new FormData(e.target) });
-      document.getElementById('status').textContent = res.ok ? 'Sent.' : 'Failed, try again.';
-      e.target.reset();
-    };
-  </script>
-</body></html>"""
+# frontend/ (React, `npx getdesign@latest add elevenlabs` styling) is the real
+# UI; this backend route just redirects the SMS link to it.
+FRONTEND_BASE_URL = os.environ.get("FRONTEND_BASE_URL", "http://localhost:5173")
 
 
 def _extract_pdf_text(raw: bytes) -> str | None:
@@ -39,9 +22,9 @@ def _extract_pdf_text(raw: bytes) -> str | None:
         return None
 
 
-@router.get("/input/{call_sid}", response_class=HTMLResponse)
+@router.get("/input/{call_sid}")
 async def input_page(call_sid: str):
-    return INPUT_PAGE.replace("{call_sid!r}", repr(call_sid))
+    return RedirectResponse(f"{FRONTEND_BASE_URL}/call/{call_sid}")
 
 
 @router.post("/input/lookup")
